@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.hyperlocalecom.viewmodel.AuthViewModel
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import com.example.hyperlocalecom.data.local.TokenManager
@@ -24,7 +25,14 @@ fun HomeScreen(email: String, viewModel: AuthViewModel = viewModel(),navControll
 //
 //    val token by tokenManager.getToken.collectAsState(initial = null)
     val token = TokenManager.getToken()
-
+    Button(onClick = {
+        TokenManager.clearToken()
+        navController.navigate("login") {
+            popUpTo("home") { inclusive = true }
+        }
+    }) {
+        Text("Logout")
+    }
     LaunchedEffect(token) {
         token?.let {
             viewModel.fetchStore(it)
