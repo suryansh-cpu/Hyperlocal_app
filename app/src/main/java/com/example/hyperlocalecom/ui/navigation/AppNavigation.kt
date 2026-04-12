@@ -75,7 +75,7 @@ fun AppNavigation() {
 
         composable("home") {
             HomeScreen(
-                email = "Shop Owner",
+//                email = "Shop Owner",
                 viewModel = viewModel,
                 navController = navController
             )
