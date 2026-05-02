@@ -25,8 +25,8 @@ object RetrofitInstance {
 
     private val retrofit by lazy {
         Retrofit.Builder()
-            .baseUrl("http://10.0.2.2:8000/")
-//            .baseUrl("https://urbanrack.onrender.com/")
+//            .baseUrl("http://10.0.2.2:8000/")
+            .baseUrl("https://urbanrack.onrender.com/")
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

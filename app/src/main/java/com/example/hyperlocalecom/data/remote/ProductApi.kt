@@ -15,8 +15,8 @@ interface ProductApi {
 
     @POST("api/v1/store-owner/products/{id}/variants")
     suspend fun addVariant(
-        productId: String,
-        variant: VariantRequest
+        @Path("id") productId: String,
+        @Body variant: VariantRequest
     )
 
     @POST("api/v1/store-owner/products/{id}/images")

@@ -60,25 +60,26 @@ fun HomeScreen(
     val store = viewModel.storeData.value
     val products = viewModel.products.value
     var searchQuery by remember { mutableStateOf("") }
+
     LaunchedEffect(token) {
-        token?.let {
-            viewModel.fetchStore(it)
-            viewModel.fetchProducts(it)
+        if (token != null) {
+            viewModel.fetchStore()
+            viewModel.fetchProducts()
         }
     }
+
     LaunchedEffect(searchQuery) {
-        val token = TokenManager.getToken()
-
-        token?.let {
+        val currentToken = TokenManager.getToken()
+        if (currentToken != null) {
             kotlinx.coroutines.delay(200)
-
             if (searchQuery.isBlank()) {
-                viewModel.fetchProducts(it, null) // ✅ show all
+                viewModel.fetchProducts(null)
             } else {
-                viewModel.fetchProducts(it, searchQuery)
+                viewModel.fetchProducts(searchQuery)
             }
         }
     }
+
     Column(
         modifier = Modifier
             .padding(24.dp)
@@ -90,7 +91,7 @@ fun HomeScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Welcome to ${store?.name}!",
+                text = "Welcome to ${store?.name ?: "Store"}!",
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier
                     .padding(8.dp)
@@ -130,10 +131,9 @@ fun HomeScreen(
             onClick = {
                 navController.navigate("addProduct")
             },
-//            modifier = Modifier.align(Alignment.BottomEnd)
             containerColor = MaterialTheme.colorScheme.primary
         ) {
-            Text("Add Product",modifier = Modifier.padding(8.dp))
+            Text("Add Product", modifier = Modifier.padding(8.dp))
         }
     }
 }
