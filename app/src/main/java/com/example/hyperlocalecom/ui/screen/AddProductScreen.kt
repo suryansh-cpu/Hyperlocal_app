@@ -50,11 +50,9 @@ import com.example.hyperlocalecom.data.model.AddImageRequest
 import com.example.hyperlocalecom.data.model.CloudinaryResponse
 import com.example.hyperlocalecom.data.model.ProductCreateRequest
 import com.example.hyperlocalecom.data.model.ProductData
-import com.example.hyperlocalecom.data.model.VariantRequest
 import com.example.hyperlocalecom.data.remote.RetrofitInstance.productApi
 import com.example.hyperlocalecom.data.repository.uploadImageToCloudinary
 import com.example.hyperlocalecom.ui.components.CustomTextField
-import com.example.hyperlocalecom.ui.components.VariantCard
 import com.example.hyperlocalecom.viewmodel.AuthViewModel
 import kotlinx.coroutines.launch
 import java.io.File
@@ -64,19 +62,15 @@ fun AddProductScreen(
     navController: NavController,
     viewModel: AuthViewModel
 ) {
-
     var productData by remember { mutableStateOf(ProductData()) }
-    var variants by remember { mutableStateOf(mutableListOf<VariantRequest>()) }
     var uploadedImages by remember { mutableStateOf<List<CloudinaryResponse>?>(null) }
     var uploading by remember { mutableStateOf(false) }
     var newSize by remember { mutableStateOf("") }
     var newStock by remember { mutableStateOf("") }
 
     val scope = rememberCoroutineScope()
-
     val context = LocalContext.current
 
-    // Image Picker
     val imageLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetMultipleContents()
     ) { uris ->
@@ -86,7 +80,6 @@ fun AddProductScreen(
     }
 
     val cameraImageUri = remember { mutableStateOf<Uri?>(null) }
-
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
@@ -99,7 +92,6 @@ fun AddProductScreen(
         }
     }
 
-
     Scaffold(
         bottomBar = {
             Column(
@@ -109,65 +101,48 @@ fun AddProductScreen(
             ) {
                 Button(
                     onClick = {
+                        if (productData.name.isBlank() || productData.price.isBlank()) {
+                            Toast.makeText(context, "Please fill Name and Price", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
                         scope.launch {
-
                             uploading = true
-
-                            // 1. Upload images if not uploaded
-                            if (uploadedImages == null && productData.images.isNotEmpty()) {
-
+                            try {
+                                // 1. Upload images
                                 val results = mutableListOf<CloudinaryResponse>()
-
                                 for (uri in productData.images) {
                                     val uploaded = uploadImageToCloudinary(context, uri)
-                                    if (uploaded != null) {
-                                        results.add(uploaded)
-                                    }
+                                    if (uploaded != null) results.add(uploaded)
                                 }
-
                                 uploadedImages = results
-                            }
 
-                            // 2. CALL BACKEND APIs
-
-                            try {
-
-                                // 🔹 CREATE PRODUCT
+                                // 2. CREATE PRODUCT
                                 val product = productApi.createProduct(
                                     ProductCreateRequest(
                                         name = productData.name,
                                         brand = productData.brand,
                                         description = productData.description,
-                                        cloth_material = productData.material
+                                        cloth_material = productData.material,
+                                        price = productData.price.toDoubleOrNull() ?: 0.0
                                     )
                                 )
 
                                 val productId = product.id
 
-                                // 🔹 ADD VARIANTS
-//                                productData.size.forEach { (size, stock) ->
-//
-//                                    productApi.addVariant(
-//                                        productId,
-//                                        VariantRequest(
-//                                            size = size,
-//                                            color = productData.color,
-//                                            price = productData.price.toDoubleOrNull() ?: 0.0,
-//                                            stock_qty = stock
-//                                        )
-//                                    )
-//                                }
+                                // 3. ADD VARIANTS
                                 productData.size.forEach { (size, stock) ->
                                     viewModel.addVariant(
                                         productId = productId,
                                         size = size,
-                                        color = productData.color,
-                                        stock = stock
+                                        color = productData.color.ifBlank { "Default" },
+                                        stock = stock,
+                                        price = productData.price.toIntOrNull() ?: 0
                                     )
                                 }
 
-                                // 🔹 ADD IMAGES
-                                uploadedImages?.forEachIndexed { index, img ->
+                                // 4. ADD IMAGES
+                                results.forEachIndexed { index, img ->
                                     productApi.addImage(
                                         productId,
                                         AddImageRequest(
@@ -179,328 +154,135 @@ fun AddProductScreen(
                                     )
                                 }
 
-                                Toast.makeText(context, "Product Added", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Product added successfully!", Toast.LENGTH_SHORT).show()
+                                viewModel.fetchProducts()
+                                navController.popBackStack()
 
                             } catch (e: Exception) {
-                                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG)
-                                    .show()
+                                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                            } finally {
+                                uploading = false
                             }
-
-                            uploading = false
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uploading
                 ) {
-                    Text(if (uploading) "Uploading..." else "Add Product")
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        navController.navigate("variant")
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                ) {
-                    Text("Add Variant")
+                    Text(if (uploading) "Processing..." else "Add Product")
                 }
             }
         }
     ) { padding ->
-
         LazyColumn(
             modifier = Modifier
                 .padding(padding)
                 .padding(16.dp)
                 .fillMaxWidth()
         ) {
-
-            // 🔥 MEDIA
             item {
                 Text("Media", style = MaterialTheme.typography.titleMedium)
-
                 Spacer(Modifier.height(8.dp))
-
-                //          ADD IMAGE BUTTON
-
-                Button(onClick = { imageLauncher.launch("image/*") }) {
-                    Text("Upload Images")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { imageLauncher.launch("image/*") }) { Text("Gallery") }
+                    Button(onClick = {
+                        val uri = createImageUri(context)
+                        cameraImageUri.value = uri
+                        cameraLauncher.launch(uri)
+                    }) { Text("Camera") }
                 }
-
                 Spacer(Modifier.height(8.dp))
-
-                Button(onClick = {
-                    val uri = createImageUri(context)
-                    cameraImageUri.value = uri
-                    cameraLauncher.launch(uri)
-                }) {
-                    Text("Capture Image")
-                }
-//                LazyRow(
-//                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-//                ) {
-//                    items(productData.images.size) { index ->
-//                        Image(
-//                            painter = rememberAsyncImagePainter(productData.images[index]),
-//                            contentDescription = null,
-//                            contentScale = ContentScale.FillWidth,
-//                            modifier = Modifier
-//                                .size(200.dp)
-//                                .clickable {
-//                                    productData = productData.copy(coverImageIndex = index)
-//                                }
-//                        )
-//                    }
-//                }
                 LazyRow {
                     items(productData.images.size) { index ->
-
-                        Box(
-                            modifier = Modifier
-                                .size(200.dp)
-                                .padding(4.dp)
-                        ) {
-
-                            // 🔹 IMAGE
+                        Box(modifier = Modifier.size(120.dp).padding(4.dp)) {
                             Image(
                                 painter = rememberAsyncImagePainter(productData.images[index]),
                                 contentDescription = null,
-                                contentScale = ContentScale.FillWidth,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(MaterialTheme.shapes.small)
-                                    .clickable {
-                                        productData = productData.copy(
-                                            coverImageIndex = index
-                                        )
-                                    }
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize().clip(MaterialTheme.shapes.small)
+                                    .clickable { productData = productData.copy(coverImageIndex = index) }
                             )
-
-                            // 🔹 REMOVE BUTTON (❌)
-//                            Icon(
-//                                imageVector = Icons.Default.Close,
-//                                contentDescription = "Remove",
-//                                tint = Color.White,
-//                                modifier = Modifier
-//                                    .align(Alignment.TopEnd)
-//                                    .size(25.dp)
-//                                    .clickable {
-//
-//                                        val newList = productData.images.toMutableList()
-//                                        newList.removeAt(index)
-//
-//                                        productData = productData.copy(
-//                                            images = newList,
-//
-//                                            // adjust cover index safely
-//                                            coverImageIndex = when {
-//                                                productData.coverImageIndex == index -> 0
-//                                                productData.coverImageIndex > index -> productData.coverImageIndex - 1
-//                                                else -> productData.coverImageIndex
-//                                            }
-//                                        )
-//                                    }
-//                            )
                             IconButton(
-                                colors = IconButtonDefaults.iconButtonColors(
-                                    containerColor = Color.Black
-                                ),
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .size(25.dp),
                                 onClick = {
                                     val newList = productData.images.toMutableList()
                                     newList.removeAt(index)
-
-                                    productData = productData.copy(
-                                        images = newList,
-
-                                        // adjust cover index safely
-                                        coverImageIndex = when {
-                                            productData.coverImageIndex == index -> 0
-                                            productData.coverImageIndex > index -> productData.coverImageIndex - 1
-                                            else -> productData.coverImageIndex
-                                        }
-                                    )
-                                }
+                                    productData = productData.copy(images = newList)
+                                },
+                                modifier = Modifier.align(Alignment.TopEnd).size(24.dp),
+                                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.6f))
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Remove",
-                                    tint = Color.White
-                                )
+                                Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(16.dp))
                             }
                         }
                     }
                 }
             }
 
-            // 🔥 PRODUCT DETAILS
             item {
                 SectionTitle("Product Details")
-
-                CustomTextField("Product Name", productData.name) {
-                    productData = productData.copy(name = it)
-                }
-
-                CustomTextField("Brand", productData.brand) {
-                    productData = productData.copy(brand = it)
-                }
-
-                CustomTextField("Material", productData.material) {
-                    productData = productData.copy(material = it)
-                }
-
-                CustomTextField("Description", productData.description, multiLine = true) {
-                    productData = productData.copy(description = it)
-                }
+                CustomTextField("Product Name", productData.name) { productData = productData.copy(name = it) }
+                CustomTextField("Brand", productData.brand) { productData = productData.copy(brand = it) }
+                CustomTextField("Material", productData.material) { productData = productData.copy(material = it) }
+                CustomTextField("Description", productData.description, multiLine = true) { productData = productData.copy(description = it) }
             }
 
-            // 🔥 ATTRIBUTES
             item {
-                SectionTitle("Attributes")
-
+                SectionTitle("Attributes & Price")
                 Row {
-                    CustomTextField(
-                        label = "Color",
-                        value = productData.color
-                    ) {
-                        productData = productData.copy(color = it)
+                    Box(modifier = Modifier.weight(1f)) {
+                        CustomTextField("Color", productData.color) { productData = productData.copy(color = it) }
                     }
-
                     Spacer(Modifier.width(8.dp))
-
-//                    CustomTextField(
-//                        label = "Size",
-//                        value = productData.size
-//                    ) {
-//                        productData = productData.copy(size = it)
-//                    }
-                }
-            }
-
-            // 🔥 PRICE
-            item {
-                SectionTitle("Pricing")
-
-                CustomTextField("Price", productData.price) {
-                    productData = productData.copy(price = it)
+                    Box(modifier = Modifier.weight(1f)) {
+                        CustomTextField("Price", productData.price) { productData = productData.copy(price = it) }
+                    }
                 }
             }
 
             item {
-                SectionTitle("Sizes")
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ){
-                    for (size in productData.size.keys) {
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "$size : ${productData.size[size]}",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            IconButton(onClick = {
-                                val updatedMap = productData.size.toMutableMap()
-                                updatedMap.remove(size)
-
-                                productData = productData.copy(size = updatedMap)
-                            }) {
-                                Icon(Icons.Default.Close, contentDescription = "Remove")
-                            }
-                        }
+                SectionTitle("Sizes & Stock")
+                productData.size.forEach { (size, stock) ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("$size : $stock", modifier = Modifier.weight(1f))
+                        IconButton(onClick = {
+                            val updatedMap = productData.size.toMutableMap()
+                            updatedMap.remove(size)
+                            productData = productData.copy(size = updatedMap)
+                        }) { Icon(Icons.Default.Close, null) }
                     }
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-
-                    Row(
-                        modifier = Modifier.weight(1f)
-                    ){
-                        CustomTextField(
-                            label = "Size",
-                            value = newSize
-                        ) {
-                            newSize = it.uppercase()
-                        }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        CustomTextField("Size", newSize) { newSize = it.uppercase() }
                     }
-
-                    Row(
-                        modifier = Modifier.weight(1f)
-                    ){
-                        CustomTextField(
-                            label = "Stock",
-                            value = newStock
-                        ) {
-                            newStock = it.uppercase()
-                        }
+                    Spacer(Modifier.width(8.dp))
+                    Box(modifier = Modifier.weight(1f)) {
+                        CustomTextField("Stock", newStock) { newStock = it }
                     }
+                    TextButton(onClick = {
+                        if (newSize.isNotBlank() && newStock.isNotBlank()) {
+                            val updatedMap = productData.size.toMutableMap()
+                            updatedMap[newSize] = newStock.toIntOrNull() ?: 0
+                            productData = productData.copy(size = updatedMap)
+                            newSize = ""; newStock = ""
+                        }
+                    }) { Text("Add") }
                 }
-                Text(
-                    "+ Add",
-                    modifier = Modifier
-                        .clickable {
-                            if (newSize.isNotBlank() && !productData.size.containsKey(newSize) && newStock.isNotBlank()) {
-
-                                val updatedMap = productData.size.toMutableMap()
-                                updatedMap[newSize] = newStock.toInt()
-
-                                productData = productData.copy(size = updatedMap)
-
-                                newSize = ""
-                                newStock = ""
-                            } else if (!newSize.isNotBlank()) {
-                                Toast.makeText(context, "Please enter a size", Toast.LENGTH_SHORT)
-                                    .show()
-                            } else if (productData.size.containsKey(newSize)) {
-                                Toast.makeText(context, "Size already exists", Toast.LENGTH_SHORT)
-                                    .show()
-                            } else if (newStock.isBlank()) {
-                                Toast.makeText(
-                                    context,
-                                    "Please enter stock quantity for the size",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        }
-                        .padding(start = 8.dp),
-                    color = MaterialTheme.colorScheme.primary
-                )
             }
-
-//            // 🔥 VARIANTS PREVIEW
-//            if (variants.isNotEmpty()) {
-//                item {
-//                    SectionTitle("Variants")
-//
-//                    variants.forEach {
-//                        VariantCard(it, onDecrease = {}, onIncrease = {})
-//                    }
-//                }
-//            }
         }
     }
 }
 
 @Composable
+fun TextButton(onClick: () -> Unit, content: @Composable () -> Unit) {
+    androidx.compose.material3.TextButton(onClick = onClick) { content() }
+}
+
+@Composable
 fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleMedium)
+    Text(text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
 }
 
 fun createImageUri(context: Context): Uri {
-    val file = File(
-        context.cacheDir,
-        "camera_${System.currentTimeMillis()}.jpg"
-    )
-    return FileProvider.getUriForFile(
-        context,
-        "${context.packageName}.provider",
-        file
-    )
+    val file = File(context.cacheDir, "camera_${System.currentTimeMillis()}.jpg")
+    return FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
 }

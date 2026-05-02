@@ -106,7 +106,8 @@ class AuthViewModel : ViewModel() {
         productId: String,
         size: String,
         color: String,
-        stock: Int
+        stock: Int,
+        price: Int
     ): VariantResponse? {
         return try {
             api.addVariant(
@@ -114,7 +115,7 @@ class AuthViewModel : ViewModel() {
                 AddVariantRequest(
                     size = size,
                     color = color,
-                    price = 100,
+                    price = price,
                     stockQty = stock
                 )
             )
