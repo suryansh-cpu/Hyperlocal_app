@@ -2,16 +2,40 @@ package com.example.hyperlocalecom.ui.screen
 
 import android.util.Log
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toMutableStateList
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.example.hyperlocalecom.viewmodel.AuthViewModel
+import com.example.hyperlocalecom.data.model.VariantResponse
 import com.example.hyperlocalecom.ui.components.VariantCard
+import com.example.hyperlocalecom.viewmodel.AuthViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun ProductDetailScreen(
@@ -39,6 +63,12 @@ fun ProductDetailScreen(
     val product = data.product
 
     var isUpdating by remember { mutableStateOf(false) }
+
+    var selectedColorVariants by remember {
+        mutableStateOf<List<VariantResponse>?>(null)
+    }
+
+    var selectedColorName by remember { mutableStateOf<String?>(null) }
 
     var selectedImage: String? by remember {
         mutableStateOf(data.images.firstOrNull()?.imageUrl ?: "")
@@ -80,49 +110,6 @@ fun ProductDetailScreen(
                 }
             }
         }
-
-//        // 🔥 RIGHT - VARIANTS
-//        Column(
-//            modifier = Modifier
-//                .weight(1.5f)
-//                .padding(16.dp)
-//        ) {
-//
-//            Text(
-//                text = product.name,
-//                style = MaterialTheme.typography.headlineSmall
-//            )
-//
-//            Spacer(modifier = Modifier.height(16.dp))
-//
-//            val grouped = data.variants.groupBy { it.color }
-//
-//            LazyColumn {
-//
-//                grouped.forEach { (color, list) ->
-//
-//                    item {
-//                        Text(
-//                            text = "Color: $color",
-//                            style = MaterialTheme.typography.titleMedium
-//                        )
-//                    }
-//
-//                    items(list) { variant ->
-//                        VariantCard(
-//                            variant = variant,
-//                            onIncrease = {},
-//                            onDecrease = {},
-//                            onEdit = {}
-//                        )
-//                    }
-//
-//                    item {
-//                        Spacer(modifier = Modifier.height(16.dp))
-//                    }
-//                }
-//            }
-//        }
         Column(
             modifier = Modifier
                 .weight(1.5f)
@@ -136,7 +123,6 @@ fun ProductDetailScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
             Log.d("IMAGE_DEBUG", data.images.toString())
-//            val grouped = data.variants.groupBy { it.color }
             val grouped = variantsState.groupBy { it.color }
             if (data.images.isNotEmpty()) {
 
@@ -153,51 +139,35 @@ fun ProductDetailScreen(
             LazyColumn {
 
                 grouped.forEach { (color, list) ->
-
                     item {
-                        Text(
-                            text = "Color: $color",
-                            style = MaterialTheme.typography.titleLarge
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+
+                            Text(
+                                text = "Color: $color",
+                                style = MaterialTheme.typography.titleLarge
+                            )
+
+                            Text(
+                                text = "Edit",
+                                modifier = Modifier
+                                    .clickable {
+                                        selectedColorVariants = list
+                                        selectedColorName = color
+                                    }
+                                    .padding(8.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
-
                     items(list) { variant ->
-
-//                        VariantCard(
-//                            variant = variant,
-//
-//                            onIncrease = { v ->
-//                                val index = variantsState.indexOf(v)
-//                                if (index != -1) {
-//                                    variantsState[index] =
-//                                        variantsState[index].copy(stock = v.stock + 1)
-//                                }
-//                            },
-//
-//                            onDecrease = { v ->
-//                                val index = variantsState.indexOf(v)
-//                                if (index != -1 && v.stock > 0) {
-//                                    variantsState[index] =
-//                                        variantsState[index].copy(stock = v.stock - 1)
-//                                }
-//                            },
-//
-//                            onEdit = {}
-//                        )
                         VariantCard(
                             variant = variant,
-
-//                            onIncrease = { v ->
-//                                val index = variantsState.indexOf(v)
-//                                if (index != -1) {
-//                                    val newStock = v.stock + 1
-//
-//                                    variantsState[index] =
-//                                        variantsState[index].copy(stock = newStock)
-//
-//                                    viewModel.updateVariantStock(v.id, newStock) // 🔥 API CALL
-//                                }
-//                            },
                             onIncrease = { v ->
                                 if (isUpdating) return@VariantCard
 
@@ -228,42 +198,201 @@ fun ProductDetailScreen(
                                 }
                             },
 
-                            onEdit = {}
+//                            onEdit = {}
                         )
                     }
                 }
             }
-//            LazyColumn {
-//
-//                grouped.forEach { (color, list) ->
-//
-//                    item {
-//                        Text(
-//                            text = "Color: $color",
-//                            style = MaterialTheme.typography.titleLarge
-//                        )
-//
-//                        Spacer(modifier = Modifier.height(8.dp))
-//                    }
-//
-//                    items(list) { variant ->
-//                        VariantCard(
-//                            variant = variant,
-//                            onIncrease = { v ->
-//                                v.stock += 1
-//                            },
-//                            onDecrease = { v ->
-//                                if (v.stock > 0) v.stock -= 1
-//                            },
-//                            onEdit = {}
-//                        )
-//                    }
-//
-//                    item {
-//                        Spacer(modifier = Modifier.height(20.dp))
-//                    }
-//                }
-//            }
         }
+    }
+    if (selectedColorVariants != null) {
+        AlertDialog(
+            onDismissRequest = {
+                selectedColorVariants = null
+                /***
+                 * hi
+                 */
+                selectedColorName = null
+            },
+            confirmButton = {},
+            text = {
+
+                val editedVariants = remember {
+                    selectedColorVariants!!.map {
+                        it.copy(stock = it.stock)
+                    }.toMutableStateList()
+                }
+                val originalVariants = remember {
+                    selectedColorVariants!!.map { it.copy() }
+                }
+                var newSize by remember { mutableStateOf("") }
+                val colorName = selectedColorName
+                Column {
+
+                    Text(
+                        text = "Edit $colorName",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    editedVariants.forEachIndexed { index, variant ->
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+
+                            Text("Size: ${variant.size}")
+
+                            Row {
+
+                                Text(
+                                    "-",
+                                    modifier = Modifier
+                                        .clickable {
+                                            if (variant.stock > 0) {
+                                                editedVariants[index] =
+                                                    variant.copy(stock = variant.stock - 1)
+                                            }
+                                        }
+                                        .padding(8.dp)
+                                )
+
+                                Text("${variant.stock}")
+
+                                Text(
+                                    "+",
+                                    modifier = Modifier
+                                        .clickable {
+                                            editedVariants[index] =
+                                                variant.copy(stock = variant.stock + 1)
+                                        }
+                                        .padding(8.dp)
+                                )
+
+                                Text(
+                                    "Delete",
+                                    modifier = Modifier
+                                        .clickable {
+                                            editedVariants.removeAt(index)
+                                        }
+                                        .padding(start = 12.dp),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    // ✅ FIXED ADD SIZE INPUT
+                    Row {
+                        androidx.compose.material3.TextField(
+                            value = newSize,
+                            onValueChange = { newSize = it.uppercase() },
+                            label = { Text("Size") },
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        Text(
+                            "+ Add",
+                            modifier = Modifier
+                                .clickable {
+                                    if (newSize.isNotBlank()) {
+                                        editedVariants.add(
+                                            VariantResponse(
+                                                id = "",
+                                                color = colorName,
+                                                size = newSize,
+                                                stock = 0
+                                            )
+                                        )
+                                        newSize = ""
+                                    }
+                                }
+                                .padding(8.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+
+                        Text(
+                            "Cancel",
+                            modifier = Modifier
+                                .clickable {
+                                    selectedColorVariants = null
+                                    selectedColorName = null
+                                }
+                                .padding(8.dp)
+                        )
+                        Text(
+                            "Save",
+                            modifier = Modifier.clickable {
+
+                                // ✅ 1. UPDATE UI IMMEDIATELY
+                                val index = variantsState.indexOfFirst { it.color == colorName }
+
+                                variantsState.removeAll { it.color == colorName }
+                                variantsState.addAll(index, editedVariants)
+
+                                selectedColorVariants = null
+                                selectedColorName = null
+
+                                // ✅ 2. RUN API IN BACKGROUND
+                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
+                                    .launch {
+
+                                        // 🔥 ADD + UPDATE
+                                        editedVariants.forEach { updated ->
+
+                                            val existing =
+                                                variantsState.find { it.id == updated.id }
+
+                                            if (existing != null && updated.id.isNotEmpty()) {
+                                                if (existing.stock != updated.stock) {
+                                                    viewModel.updateVariantStock(
+                                                        updated.id,
+                                                        updated.stock
+                                                    )
+                                                }
+                                            } else {
+                                                viewModel.addVariant(
+                                                    product.id,
+                                                    updated.size,
+                                                    colorName ?: "",
+                                                    updated.stock
+                                                )
+                                            }
+                                        }
+
+                                        // 🔥 DELETE
+                                        originalVariants.forEach { old ->
+
+                                            val stillExists = editedVariants.any { it.id == old.id }
+
+                                            if (!stillExists && old.color == colorName && old.id.isNotEmpty()) {
+                                                viewModel.deleteVariant(old.id)
+                                            }
+                                        }
+
+                                        // 🔥 FINAL REFRESH (VERY IMPORTANT)
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                            viewModel.fetchProductDetails(product.id)
+                                        }
+                                    }
+                            }
+                        )
+                    }
+                }
+            }
+        )
     }
 }

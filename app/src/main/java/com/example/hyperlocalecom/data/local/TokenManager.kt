@@ -29,6 +29,7 @@ package com.example.hyperlocalecom.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 
 object TokenManager {
 
@@ -42,7 +43,7 @@ object TokenManager {
     }
 
     fun saveToken(token: String) {
-        prefs.edit().putString(KEY_TOKEN, token).apply()
+        prefs.edit { putString(KEY_TOKEN, token) }
     }
 
     fun getToken(): String? {
@@ -50,6 +51,6 @@ object TokenManager {
     }
 
     fun clearToken() {
-        prefs.edit().clear().apply()
+        prefs.edit { clear() }
     }
 }

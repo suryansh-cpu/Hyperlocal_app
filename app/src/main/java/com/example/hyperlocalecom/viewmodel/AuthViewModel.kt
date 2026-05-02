@@ -5,12 +5,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.hyperlocalecom.data.local.TokenManager
+import com.example.hyperlocalecom.data.model.AddVariantRequest
 import com.example.hyperlocalecom.data.model.LoginRequest
 import com.example.hyperlocalecom.data.model.LoginResponse
 import com.example.hyperlocalecom.data.model.Product
 import com.example.hyperlocalecom.data.model.ProductDetailResponse
 import com.example.hyperlocalecom.data.model.StoreResponse
-import com.example.hyperlocalecom.data.remote.RetrofitInstance
+import com.example.hyperlocalecom.data.model.VariantRequest
+import com.example.hyperlocalecom.data.model.VariantResponse
+import com.example.hyperlocalecom.data.model.VariantUpdateRequest
 import com.example.hyperlocalecom.data.remote.RetrofitInstance.api
 import kotlinx.coroutines.launch
 
@@ -26,7 +29,7 @@ class AuthViewModel : ViewModel() {
     fun fetchStore(token: String) {
         viewModelScope.launch {
             try {
-                val response = RetrofitInstance.api.getStore("Bearer $token")
+                val response = api.getStore("Bearer $token")
                 storeData.value = response
             } catch (e: Exception) {
                 error.value = e.message
@@ -42,7 +45,7 @@ class AuthViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             try {
-                val response = RetrofitInstance.api.login(
+                val response = api.login(
                     LoginRequest(email, password)
                 )
 
@@ -54,38 +57,35 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    fun fetchProducts(token: String) {
-        Log.d("PRODUCT_DEBUG", "API CALLED")
-
+    fun fetchProducts(token: String, query: String? = null) {
         viewModelScope.launch {
             try {
-                val response = RetrofitInstance.api.getProducts("Bearer $token")
-
-                Log.d("PRODUCT_DEBUG", "RESPONSE: ${response.items}")
-
+//                val response = api.getProducts(token, query)
+                val response = api.getProducts("Bearer $token", query)
                 products.value = response.items
-
             } catch (e: Exception) {
-                Log.d("PRODUCT_DEBUG", "ERROR: ${e.message}")
+                e.printStackTrace()
             }
         }
     }
-
-//    fun fetchProductDetails(productId: String, token: String) {
+//    fun fetchProducts(token: String) {
+//        Log.d("PRODUCT_DEBUG", "API CALLED")
+//
 //        viewModelScope.launch {
 //            try {
-//                val response = RetrofitInstance.api.getProductById(
-//                    productId,
-//                    "Bearer $token"
-//                )
-//                productDetails.value = response
+//                val response = RetrofitInstance.api.getProducts("Bearer $token")
+//
+//                Log.d("PRODUCT_DEBUG", "RESPONSE: ${response.items}")
+//
+//                products.value = response.items
+//
 //            } catch (e: Exception) {
-//                error.value = e.message
+//                Log.d("PRODUCT_DEBUG", "ERROR: ${e.message}")
 //            }
 //        }
 //    }
 
-//    var productDetails = mutableStateOf<ProductDetailResponse?>(null)
+    //    var productDetails = mutableStateOf<ProductDetailResponse?>(null)
     var isLoadingProductDetails = mutableStateOf(false)
 
     fun fetchProductDetails(productId: String) {
@@ -94,7 +94,7 @@ class AuthViewModel : ViewModel() {
                 isLoadingProductDetails.value = true
 
                 val token = "Bearer ${TokenManager.getToken()}"
-                val response = RetrofitInstance.api.getProductById(productId, token)
+                val response = api.getProductById(productId, token)
 
                 productDetails.value = response
 
@@ -106,7 +106,7 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-//    fun updateVariantStock(variantId: String, newStock: Int) {
+    //    fun updateVariantStock(variantId: String, newStock: Int) {
 //        viewModelScope.launch {
 //            try {
 //                val token = "Bearer ${TokenManager.getToken()}"
@@ -132,16 +132,83 @@ class AuthViewModel : ViewModel() {
             try {
                 val token = "Bearer ${TokenManager.getToken()}"
 
-                val response = RetrofitInstance.api.updateVariant(
+                val response = api.updateVariant(
                     variantId,
                     token,
-                    mapOf("stock_qty" to newStock) // 🔥 FIX KEY
+                    VariantUpdateRequest(newStock)
                 )
 
                 Log.d("UPDATE_API", "UPDATED: ${response.stock}")
 
             } catch (e: Exception) {
                 Log.e("UPDATE_API", "FAILED: ${e.message}")
+            }
+        }
+    }
+
+    //    fun addVariant(productId: String, size: String, color: String, stock: Int) {
+//        Log.d("ADD_VARIANT", "Adding: $size $color $stock")
+//        viewModelScope.launch {
+//            try {
+//                val token = "Bearer ${TokenManager.getToken()}"
+//
+//                api.addVariant(
+//                    productId,
+//                    token,
+////                    mapOf(
+////                        "size" to size,
+////                        "color" to color,
+////                        "price" to 100,
+////                        "stock_qty" to stock
+////                    )
+//                    AddVariantRequest(
+//                        size = size,
+//                        color = color,
+//                        price = 100,
+//                        stockQty = stock
+//                    )
+//                )
+//
+//                delay(300) // 🔥 IMPORTANT
+//
+//            } catch (e: Exception) {
+//                e.printStackTrace()
+//            }
+//        }
+//    }
+    suspend fun addVariant(
+        productId: String,
+        size: String,
+        color: String,
+        stock: Int
+    ): VariantResponse? {
+        return try {
+            val token = "Bearer ${TokenManager.getToken()}"
+
+            api.addVariant(
+                productId,
+                token,
+                AddVariantRequest(
+                    size = size,
+                    color = color,
+                    price = 100,
+                    stockQty = stock
+                )
+            )
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    fun deleteVariant(variantId: String) {
+        viewModelScope.launch {
+            try {
+                val token = "Bearer ${TokenManager.getToken()}"
+                api.deleteVariant(variantId, token)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
