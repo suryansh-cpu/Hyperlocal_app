@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.hyperlocalecom.data.model.VariantResponse
@@ -160,12 +161,15 @@ fun ProductDetailScreen(
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.Gray
             )
-            Text(
-                text = "Price: ₹$displayPrice",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 4.dp)
-            )
+            if (displayPrice != "--") {
+                Text(
+                    text = "Price: ₹$displayPrice",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
             Spacer(modifier = Modifier.height(16.dp))
         }
 
