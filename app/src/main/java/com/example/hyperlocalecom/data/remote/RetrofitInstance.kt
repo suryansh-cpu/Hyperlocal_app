@@ -39,4 +39,16 @@ object RetrofitInstance {
     val productApi: ProductApi by lazy {
         retrofit.create(ProductApi::class.java)
     }
+
+    private val vercelRetrofit by lazy {
+        Retrofit.Builder()
+            .baseUrl("https://urbanrack.vercel.app/")
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+
+    val cloudinarySignApi: CloudinarySignApi by lazy {
+        vercelRetrofit.create(CloudinarySignApi::class.java)
+    }
 }

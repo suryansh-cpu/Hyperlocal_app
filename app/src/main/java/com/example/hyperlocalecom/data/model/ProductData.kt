@@ -35,9 +35,7 @@ data class ProductCreateRequest(
     @SerializedName("description")
     val description: String?,
     @SerializedName("cloth_material")
-    val cloth_material: String?,
-    @SerializedName("price")
-    val price: Double? = null
+    val cloth_material: String?
 )
 
 data class Product(

@@ -2,95 +2,58 @@ package com.example.hyperlocalecom.data.repository
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import com.example.hyperlocalecom.data.model.CloudinaryResponse
 import com.example.hyperlocalecom.data.remote.CloudinaryInstance
-import com.example.hyperlocalecom.data.remote.CloudinarySignInstance
+import com.example.hyperlocalecom.data.remote.CloudinarySignRequest
+import com.example.hyperlocalecom.data.remote.RetrofitInstance
 import com.example.hyperlocalecom.utils.uriToFile
-import com.google.gson.Gson
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
-import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 
 suspend fun uploadImageToCloudinary(
     context: Context,
-    uri: Uri
+    uri: Uri,
+    productName: String,
+    kind: String,
+    color: String? = null
 ): CloudinaryResponse? {
 
-    try {
-        // 🔹 1. GET SIGNATURE
-        val sign = CloudinarySignInstance.api.getSignature()
+    // 🔹 1. GET SIGNATURE
+    val sign = RetrofitInstance.cloudinarySignApi.getSignature(
+        CloudinarySignRequest(productName, kind, color)
+    )
+    Log.d("CLOUDINARY_DEBUG", "Signature received for: ${sign.publicId}")
 
-        // 🔹 2. URI → FILE
-        val file = uriToFile(context, uri)
+    // 🔹 2. URI → FILE
+    val file = uriToFile(context, uri)
+    val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
+    val filePart = MultipartBody.Part.createFormData("file", file.name, requestFile)
 
-        val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
+    // 🔹 3. PREPARE PARTS (using MultipartBody.Part to avoid Gson quoting strings)
+    val apiKeyPart = MultipartBody.Part.createFormData("api_key", sign.apiKey)
+    val timestampPart = MultipartBody.Part.createFormData("timestamp", sign.timestamp.toString())
+    val signaturePart = MultipartBody.Part.createFormData("signature", sign.signature)
+    val folderPart = MultipartBody.Part.createFormData("folder", sign.folder)
+    val publicIdPart = MultipartBody.Part.createFormData("public_id", sign.publicId)
 
-        val body = MultipartBody.Part.createFormData(
-            "file",
-            file.name,
-            requestFile
-        )
-
-        // 🔹 3. REQUIRED PARAMS
-        val apiKey = sign.apiKey.toRequestBody("text/plain".toMediaTypeOrNull())
-        val timestamp = sign.timestamp.toString().toRequestBody("text/plain".toMediaTypeOrNull())
-        val signature = sign.signature.toRequestBody("text/plain".toMediaTypeOrNull())
-        val folder = sign.folder.toRequestBody("text/plain".toMediaTypeOrNull())
-        val publicId = sign.publicId.toRequestBody("text/plain".toMediaTypeOrNull())
-
-        // 🔹 4. UPLOAD
+    // 🔹 4. UPLOAD
+    return try {
         val response = CloudinaryInstance.api.uploadImage(
-            sign.cloudName,
-            body,
-            apiKey,
-            timestamp,
-            signature,
-            folder,
-            publicId
+            cloudName = sign.cloudName,
+            file = filePart,
+            apiKey = apiKeyPart,
+            timestamp = timestampPart,
+            signature = signaturePart,
+            folder = folderPart,
+            publicId = publicIdPart
         )
-
-        if (response.isSuccessful) {
-            val json = response.body()?.string()
-            return Gson().fromJson(json, CloudinaryResponse::class.java)
-        }
-
+        Log.d("CLOUDINARY_DEBUG", "Upload Success: ${response.secure_url}")
+        response
     } catch (e: Exception) {
+        Log.e("CLOUDINARY_DEBUG", "Upload Failed: ${e.message}")
         e.printStackTrace()
+        throw e
     }
-
-    return null
 }
-//suspend fun uploadImageToCloudinary(
-//    context: Context,
-//    uri: Uri
-//): CloudinaryResponse? {
-//
-//    val file = uriToFile(context, uri)
-//
-//    val requestFile = RequestBody.create(
-//        "image/*".toMediaTypeOrNull(),
-//        file
-//    )
-//
-//    val body = MultipartBody.Part.createFormData(
-//        "file",
-//        file.name,
-//        requestFile
-//    )
-//
-//    val preset = MultipartBody.Part.createFormData(
-//        "upload_preset",
-//        "ml_default"
-//    )
-//
-//    val response = CloudinaryInstance.api.uploadImage(body, preset)
-//
-//    if (response.isSuccessful) {
-//        val json = response.body()?.string()
-//        return Gson().fromJson(json, CloudinaryResponse::class.java)
-//    }
-//
-//    return null
-//}

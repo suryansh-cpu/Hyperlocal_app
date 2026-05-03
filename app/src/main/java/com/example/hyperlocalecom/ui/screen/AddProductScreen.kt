@@ -111,8 +111,15 @@ fun AddProductScreen(
                             try {
                                 // 1. Upload images
                                 val results = mutableListOf<CloudinaryResponse>()
-                                for (uri in productData.images) {
-                                    val uploaded = uploadImageToCloudinary(context, uri)
+                                productData.images.forEachIndexed { index, uri ->
+                                    val kind = if (index == productData.coverImageIndex) "primary" else "generic"
+                                    val uploaded = uploadImageToCloudinary(
+                                        context = context,
+                                        uri = uri,
+                                        productName = productData.name,
+                                        kind = kind,
+                                        color = productData.color.ifBlank { null }
+                                    )
                                     if (uploaded != null) results.add(uploaded)
                                 }
                                 uploadedImages = results
@@ -123,8 +130,7 @@ fun AddProductScreen(
                                         name = productData.name,
                                         brand = productData.brand,
                                         description = productData.description,
-                                        cloth_material = productData.material,
-                                        price = productData.price.toDoubleOrNull() ?: 0.0
+                                        cloth_material = productData.material
                                     )
                                 )
 
