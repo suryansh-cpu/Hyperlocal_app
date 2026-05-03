@@ -13,6 +13,12 @@ interface ProductApi {
         @Body body: ProductCreateRequest
     ): ProductResponse
 
+    @PATCH("api/v1/store-owner/products/{id}")
+    suspend fun updateProduct(
+        @Path("id") productId: String,
+        @Body body: ProductCreateRequest
+    )
+
     @POST("api/v1/store-owner/products/{id}/variants")
     suspend fun addVariant(
         @Path("id") productId: String,

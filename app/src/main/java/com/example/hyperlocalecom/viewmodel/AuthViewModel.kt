@@ -102,6 +102,29 @@ class AuthViewModel : ViewModel() {
         }
     }
 
+    suspend fun updateProduct(
+        productId: String,
+        name: String,
+        brand: String?,
+        material: String?,
+        description: String?
+    ) {
+        try {
+            com.example.hyperlocalecom.data.remote.RetrofitInstance.productApi.updateProduct(
+                productId,
+                com.example.hyperlocalecom.data.model.ProductCreateRequest(
+                    name = name,
+                    brand = brand,
+                    cloth_material = material,
+                    description = description
+                )
+            )
+        } catch (e: Exception) {
+            Log.e("API_ERROR", "Update Product Failed: ${e.message}")
+            throw e
+        }
+    }
+
     suspend fun addVariant(
         productId: String,
         size: String,

@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.hyperlocalecom.data.model.VariantResponse
 import com.example.hyperlocalecom.ui.components.VariantCard
@@ -45,7 +46,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun ProductDetailScreen(
     productId: String,
-    viewModel: AuthViewModel
+    viewModel: AuthViewModel,
+    navController: NavController
 ) {
     val productDetails by viewModel.productDetails
     val isLoading by viewModel.isLoadingProductDetails
@@ -75,10 +77,17 @@ fun ProductDetailScreen(
 
     var selectedColorName by remember { mutableStateOf<String?>(null) }
 
-    // 🔥 FIX 1: Improved Image Selection Logic (fallback to product.imageUrl)
-    var selectedImage by remember(data.images, product.imageUrl) {
-        val firstGalleryImage = data.images.firstOrNull { !it.imageUrl.isNullOrBlank() }?.imageUrl
-        mutableStateOf(firstGalleryImage ?: product.imageUrl ?: "")
+    // 🔥 FIX 1: Improved Image Selection Logic
+    var selectedImage by remember(data.images) {
+        val firstImg = data.images.firstOrNull { !it.imageUrl.isNullOrBlank() }?.imageUrl
+        mutableStateOf(firstImg ?: "")
+    }
+
+    LaunchedEffect(data.images) {
+        Log.d("PRODUCT_DETAIL", "Images received: ${data.images.size}")
+        if (selectedImage.isBlank()) {
+            selectedImage = data.images.firstOrNull { !it.imageUrl.isNullOrBlank() }?.imageUrl ?: ""
+        }
     }
 
     // 🔥 FIX 2: Calculate Display Price from variants if main price is null
@@ -147,10 +156,22 @@ fun ProductDetailScreen(
 
         // 🔥 PRODUCT INFO
         item {
-            Text(
-                text = product.name,
-                style = MaterialTheme.typography.headlineMedium
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = product.name,
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                androidx.compose.material3.Button(
+                    onClick = { navController.navigate("addVariant/${product.id}") }
+                ) {
+                    Text("Add Variant")
+                }
+            }
             Text(
                 text = "Brand: ${product.brand ?: "--"}",
                 style = MaterialTheme.typography.bodyLarge,

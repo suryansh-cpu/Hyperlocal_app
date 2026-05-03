@@ -54,7 +54,8 @@ fun AppNavigation() {
 
             ProductDetailScreen(
                 productId = productId,
-                viewModel = viewModel
+                viewModel = viewModel,
+                navController = navController
             )
         }
         composable(
@@ -63,6 +64,17 @@ fun AppNavigation() {
             AddProductScreen(
                 navController = navController,
                 viewModel = viewModel
+            )
+        }
+        composable(
+            route = "addVariant/{productId}",
+            arguments = listOf(navArgument("productId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val productId = backStackEntry.arguments?.getString("productId") ?: ""
+            com.example.hyperlocalecom.ui.screen.AddVariantScreen(
+                navController = navController,
+                viewModel = viewModel,
+                productId = productId
             )
         }
     }

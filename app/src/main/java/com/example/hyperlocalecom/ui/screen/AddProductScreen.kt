@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,18 +21,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -42,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.navigation.NavController
@@ -62,35 +68,12 @@ fun AddProductScreen(
     navController: NavController,
     viewModel: AuthViewModel
 ) {
-    var productData by remember { mutableStateOf(ProductData()) }
-    var uploadedImages by remember { mutableStateOf<List<CloudinaryResponse>?>(null) }
+    var mainInfo by remember { mutableStateOf(ProductData()) }
+    val variants = remember { mutableStateListOf(ProductData()) }
     var uploading by remember { mutableStateOf(false) }
-    var newSize by remember { mutableStateOf("") }
-    var newStock by remember { mutableStateOf("") }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-
-    val imageLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetMultipleContents()
-    ) { uris ->
-        productData = productData.copy(
-            images = (productData.images + uris).toMutableList()
-        )
-    }
-
-    val cameraImageUri = remember { mutableStateOf<Uri?>(null) }
-    val cameraLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicture()
-    ) { success ->
-        if (success) {
-            cameraImageUri.value?.let {
-                productData = productData.copy(
-                    images = (productData.images + it).toMutableList()
-                )
-            }
-        }
-    }
 
     Scaffold(
         bottomBar = {
@@ -101,66 +84,69 @@ fun AddProductScreen(
             ) {
                 Button(
                     onClick = {
-                        if (productData.name.isBlank() || productData.price.isBlank()) {
-                            Toast.makeText(context, "Please fill Name and Price", Toast.LENGTH_SHORT).show()
+                        if (mainInfo.name.isBlank()) {
+                            Toast.makeText(context, "Please fill Product Name", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
 
                         scope.launch {
                             uploading = true
                             try {
-                                // 1. Upload images
-                                val results = mutableListOf<CloudinaryResponse>()
-                                productData.images.forEachIndexed { index, uri ->
-                                    val kind = if (index == productData.coverImageIndex) "primary" else "generic"
-                                    val uploaded = uploadImageToCloudinary(
-                                        context = context,
-                                        uri = uri,
-                                        productName = productData.name,
-                                        kind = kind,
-                                        color = productData.color.ifBlank { null }
-                                    )
-                                    if (uploaded != null) results.add(uploaded)
-                                }
-                                uploadedImages = results
-
-                                // 2. CREATE PRODUCT
+                                // 1. CREATE PRODUCT
                                 val product = productApi.createProduct(
                                     ProductCreateRequest(
-                                        name = productData.name,
-                                        brand = productData.brand,
-                                        description = productData.description,
-                                        cloth_material = productData.material
+                                        name = mainInfo.name,
+                                        brand = mainInfo.brand,
+                                        description = mainInfo.description,
+                                        cloth_material = mainInfo.material
                                     )
                                 )
-
                                 val productId = product.id
 
-                                // 3. ADD VARIANTS
-                                productData.size.forEach { (size, stock) ->
-                                    viewModel.addVariant(
-                                        productId = productId,
-                                        size = size,
-                                        color = productData.color.ifBlank { "Default" },
-                                        stock = stock,
-                                        price = productData.price.toIntOrNull() ?: 0
-                                    )
-                                }
-
-                                // 4. ADD IMAGES
-                                results.forEachIndexed { index, img ->
-                                    productApi.addImage(
-                                        productId,
-                                        AddImageRequest(
-                                            image_url = img.secure_url,
-                                            cloudinary_public_id = img.public_id,
-                                            is_primary = index == productData.coverImageIndex,
-                                            sort_order = index
+                                // 2. PROCESS EACH VARIANT
+                                var imageUploadedCount = 0
+                                variants.forEach { variantData ->
+                                    // A. Upload images for this variant
+                                    val uploadedResults = mutableListOf<CloudinaryResponse>()
+                                    variantData.images.forEach { uri ->
+                                        val uploaded = uploadImageToCloudinary(
+                                            context = context,
+                                            uri = uri,
+                                            productName = mainInfo.name,
+                                            kind = if (variantData.color.isNotBlank()) "color" else "primary",
+                                            color = variantData.color.ifBlank { null }
                                         )
-                                    )
+                                        if (uploaded != null) uploadedResults.add(uploaded)
+                                    }
+
+                                    // B. Add variant stock/size
+                                    variantData.size.forEach { (size, stock) ->
+                                        viewModel.addVariant(
+                                            productId = productId,
+                                            size = size,
+                                            color = variantData.color.ifBlank { "Default" },
+                                            stock = stock,
+                                            price = variantData.price.toIntOrNull() ?: 0
+                                        )
+                                    }
+
+                                    // C. Link images to product
+                                    uploadedResults.forEach { img ->
+                                        val isFirstImage = (imageUploadedCount == 0)
+                                        productApi.addImage(
+                                            productId,
+                                            AddImageRequest(
+                                                image_url = img.secure_url,
+                                                cloudinary_public_id = img.public_id,
+                                                is_primary = isFirstImage,
+                                                sort_order = imageUploadedCount
+                                            )
+                                        )
+                                        imageUploadedCount++
+                                    }
                                 }
 
-                                Toast.makeText(context, "Product added successfully!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Product & all variants added!", Toast.LENGTH_SHORT).show()
                                 viewModel.fetchProducts()
                                 navController.popBackStack()
 
@@ -174,7 +160,7 @@ fun AddProductScreen(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uploading
                 ) {
-                    Text(if (uploading) "Processing..." else "Add Product")
+                    Text(if (uploading) "Processing..." else "Add Product with ${variants.size} Variants")
                 }
             }
         }
@@ -186,92 +172,241 @@ fun AddProductScreen(
                 .fillMaxWidth()
         ) {
             item {
-                Text("Media", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { imageLauncher.launch("image/*") }) { Text("Gallery") }
-                    Button(onClick = {
+                SectionTitle("Step 1: Core Product Info")
+                CustomTextField("Product Name", mainInfo.name) { mainInfo = mainInfo.copy(name = it) }
+                CustomTextField("Brand", mainInfo.brand) { mainInfo = mainInfo.copy(brand = it) }
+                CustomTextField("Material", mainInfo.material) { mainInfo = mainInfo.copy(material = it) }
+                CustomTextField("Description", mainInfo.description, multiLine = true) { mainInfo = mainInfo.copy(description = it) }
+                Spacer(Modifier.height(24.dp))
+            }
+
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "Step 2: Variants",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+                    )
+                    Button(
+                        onClick = { variants.add(ProductData()) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("+ Add Another Color Variant")
+                    }
+                    Spacer(Modifier.height(16.dp))
+                }
+            }
+
+            itemsIndexed(variants) { index, variant ->
+                VariantInputSection(
+                    index = index,
+                    variant = variant,
+                    onUpdate = { variants[index] = it },
+                    onRemove = { if (variants.size > 1) variants.removeAt(index) }
+                )
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun VariantInputSection(
+    index: Int,
+    variant: ProductData,
+    onUpdate: (ProductData) -> Unit,
+    onRemove: () -> Unit
+) {
+    val context = LocalContext.current
+    var newSize by remember { mutableStateOf("") }
+    var newStock by remember { mutableStateOf("") }
+
+    val imageLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        onUpdate(variant.copy(images = (variant.images + uris).toMutableList()))
+    }
+
+    val cameraImageUri = remember { mutableStateOf<Uri?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            cameraImageUri.value?.let { uri ->
+                onUpdate(variant.copy(images = (variant.images + uri).toMutableList()))
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                Modifier.fillMaxWidth(), 
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Color Group #${index + 1}", 
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                if (index > 0) {
+                    IconButton(onClick = onRemove) {
+                        Icon(Icons.Default.Close, "Remove", tint = Color.Red)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            
+            Text("Images for this Color", style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { imageLauncher.launch("image/*") },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) { 
+                    Text("Gallery") 
+                }
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { 
                         val uri = createImageUri(context)
                         cameraImageUri.value = uri
                         cameraLauncher.launch(uri)
-                    }) { Text("Camera") }
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) { 
+                    Text("Camera")
                 }
-                Spacer(Modifier.height(8.dp))
-                LazyRow {
-                    items(productData.images.size) { index ->
-                        Box(modifier = Modifier.size(120.dp).padding(4.dp)) {
+            }
+            
+            if (variant.images.isNotEmpty()) {
+                LazyRow(
+                    Modifier.padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    itemsIndexed(variant.images) { idx, uri ->
+                        Box(
+                            modifier = Modifier
+                                .size(90.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (idx == variant.coverImageIndex) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent)
+                                .clickable { onUpdate(variant.copy(coverImageIndex = idx)) }
+                        ) {
                             Image(
-                                painter = rememberAsyncImagePainter(productData.images[index]),
+                                painter = rememberAsyncImagePainter(uri),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize().clip(MaterialTheme.shapes.small)
-                                    .clickable { productData = productData.copy(coverImageIndex = index) }
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(if (idx == variant.coverImageIndex) 4.dp else 0.dp)
+                                    .clip(RoundedCornerShape(6.dp))
                             )
-                            IconButton(
-                                onClick = {
-                                    val newList = productData.images.toMutableList()
-                                    newList.removeAt(index)
-                                    productData = productData.copy(images = newList)
-                                },
-                                modifier = Modifier.align(Alignment.TopEnd).size(24.dp),
-                                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.6f))
+                            
+                            // Delete Image Button
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(4.dp)
+                                    .size(20.dp)
+                                    .background(Color.Black.copy(0.6f), RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        val newList = variant.images.toMutableList()
+                                        newList.removeAt(idx)
+                                        onUpdate(variant.copy(images = newList))
+                                    },
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(12.dp))
+                            }
+                            
+                            if (idx == variant.coverImageIndex) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.primary.copy(0.8f))
+                                        .padding(vertical = 2.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("Main", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                                }
                             }
                         }
                     }
                 }
             }
 
-            item {
-                SectionTitle("Product Details")
-                CustomTextField("Product Name", productData.name) { productData = productData.copy(name = it) }
-                CustomTextField("Brand", productData.brand) { productData = productData.copy(brand = it) }
-                CustomTextField("Material", productData.material) { productData = productData.copy(material = it) }
-                CustomTextField("Description", productData.description, multiLine = true) { productData = productData.copy(description = it) }
+            Spacer(Modifier.height(12.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.weight(1f)) {
+                    CustomTextField("Color", variant.color) { onUpdate(variant.copy(color = it)) }
+                }
+                Box(Modifier.weight(1f)) {
+                    CustomTextField("Price", variant.price) { onUpdate(variant.copy(price = it)) }
+                }
             }
 
-            item {
-                SectionTitle("Attributes & Price")
-                Row {
-                    Box(modifier = Modifier.weight(1f)) {
-                        CustomTextField("Color", productData.color) { productData = productData.copy(color = it) }
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Box(modifier = Modifier.weight(1f)) {
-                        CustomTextField("Price", productData.price) { productData = productData.copy(price = it) }
+            Spacer(Modifier.height(16.dp))
+            Text("Stock per Size", style = MaterialTheme.typography.labelLarge)
+            
+            variant.size.forEach { (s, q) ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(0.4f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(s, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text("Qty: $q", modifier = Modifier.padding(horizontal = 8.dp))
+                    IconButton(onClick = {
+                        val m = variant.size.toMutableMap()
+                        m.remove(s)
+                        onUpdate(variant.copy(size = m))
+                    }, modifier = Modifier.size(24.dp)) { 
+                        Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp)) 
                     }
                 }
             }
 
-            item {
-                SectionTitle("Sizes & Stock")
-                productData.size.forEach { (size, stock) ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("$size : $stock", modifier = Modifier.weight(1f))
-                        IconButton(onClick = {
-                            val updatedMap = productData.size.toMutableMap()
-                            updatedMap.remove(size)
-                            productData = productData.copy(size = updatedMap)
-                        }) { Icon(Icons.Default.Close, null) }
-                    }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                Box(Modifier.weight(0.4f)) {
+                    CustomTextField("Size", newSize) { newSize = it.uppercase() }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        CustomTextField("Size", newSize) { newSize = it.uppercase() }
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Box(modifier = Modifier.weight(1f)) {
-                        CustomTextField("Stock", newStock) { newStock = it }
-                    }
-                    TextButton(onClick = {
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.weight(0.4f)) {
+                    CustomTextField("Qty", newStock) { newStock = it }
+                }
+                Spacer(Modifier.width(8.dp))
+                androidx.compose.material3.TextButton(
+                    onClick = {
                         if (newSize.isNotBlank() && newStock.isNotBlank()) {
-                            val updatedMap = productData.size.toMutableMap()
-                            updatedMap[newSize] = newStock.toIntOrNull() ?: 0
-                            productData = productData.copy(size = updatedMap)
+                            val m = variant.size.toMutableMap()
+                            m[newSize] = newStock.toIntOrNull() ?: 0
+                            onUpdate(variant.copy(size = m))
                             newSize = ""; newStock = ""
                         }
-                    }) { Text("Add") }
+                    },
+                    modifier = Modifier.weight(0.2f)
+                ) { 
+                    Text("Add", fontWeight = FontWeight.Bold) 
                 }
             }
         }
@@ -279,13 +414,13 @@ fun AddProductScreen(
 }
 
 @Composable
-fun TextButton(onClick: () -> Unit, content: @Composable () -> Unit) {
-    androidx.compose.material3.TextButton(onClick = onClick) { content() }
-}
-
-@Composable
 fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+    Text(
+        text, 
+        style = MaterialTheme.typography.titleLarge, 
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(vertical = 8.dp)
+    )
 }
 
 fun createImageUri(context: Context): Uri {

@@ -29,12 +29,12 @@ data class CloudinarySignRequest(
 )
 
 data class CloudinarySignResponse(
-    val cloudName: String,
-    val apiKey: String,
+    @SerializedName("cloudName") val cloudName: String,
+    @SerializedName("apiKey") val apiKey: String,
     val timestamp: Long,
     val signature: String,
     val folder: String,
-    val publicId: String
+    @SerializedName("publicId") val publicId: String
 )
 
 interface CloudinarySignApi {
@@ -48,10 +48,10 @@ interface CloudinaryApi {
     suspend fun uploadImage(
         @Path("cloudName") cloudName: String,
         @Part file: MultipartBody.Part,
-        @Part apiKey: MultipartBody.Part,
-        @Part timestamp: MultipartBody.Part,
-        @Part signature: MultipartBody.Part,
-        @Part folder: MultipartBody.Part,
-        @Part publicId: MultipartBody.Part
+        @Part("api_key") apiKey: RequestBody,
+        @Part("timestamp") timestamp: RequestBody,
+        @Part("signature") signature: RequestBody,
+        @Part("folder") folder: RequestBody,
+        @Part("public_id") publicId: RequestBody
     ): CloudinaryResponse
 }
